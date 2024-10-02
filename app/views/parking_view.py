@@ -1,7 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter,HTTPException
 from app.controllers.parking_controller import ParkingController,VehicleRegistrationController
 from app.models.parking_spot import ParkingSpot,VehicleRegistration,VehicleRegistrationResponse
 from typing import List
+from sqlmodel import Session, select
+from app.database import engine
+
 
 router = APIRouter()
 
@@ -21,6 +24,8 @@ def read_parking_spots():
 def delete_parking_spot(slot_id: int):
     return ParkingController.delete_parking_spot(slot_id)
 
+
+
 # VEHICLE REGISTRATION
 
 @router.post("/vehicle-registration", response_model=VehicleRegistration)
@@ -34,3 +39,8 @@ def get_vehicle_registrations():
 @router.delete("/vehicle-registration/{vehicle_id}")
 def delete_vehicle_registration(vehicle_id: int):
     return VehicleRegistrationController.delete_vehicle_registration(vehicle_id)
+
+
+@router.get("/vehicle-registration/{vehicle_id}/calculate-fee", response_model=dict)
+def calculate_parking_fee(vehicle_id: int):
+    return ParkingController.get_vehicle_fee(vehicle_id)

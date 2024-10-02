@@ -12,6 +12,7 @@ class VehicleRegistration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     vehicle_number: str = Field(..., unique=True)  
     entry_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    exit_time: Optional[datetime] = None 
     parking_spot_id: Optional[int] = Field(foreign_key="parkingspot.id")  
     parking_spot: Optional[ParkingSpot] = Relationship(back_populates="vehicles") 
 
@@ -23,5 +24,7 @@ class ParkingSpotResponse(SQLModel):
 class VehicleRegistrationResponse(SQLModel):
     id: Optional[int]
     vehicle_number: str
+    exit_time: Optional[datetime]  
+    parking_fee: Optional[int]  
     entry_time: datetime
     parking_spot: Optional[ParkingSpotResponse]
