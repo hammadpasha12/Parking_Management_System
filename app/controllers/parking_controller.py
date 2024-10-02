@@ -3,6 +3,9 @@ from sqlmodel import Session, select
 from fastapi import HTTPException
 from app.models.parking_spot import ParkingSpot,VehicleRegistration
 from app.database import engine
+import pytz
+
+PST = pytz.timezone('Asia/Karachi')
 
 class ParkingController:
     @staticmethod
@@ -50,10 +53,14 @@ class ParkingController:
                 hours_parked = max(1, duration.total_seconds() // 3600)
                 parking_fee = int(hours_parked * rate_per_hour)
             else:
-                parking_fee = 0  
+                parking_fee = 50
 
-            formatted_entry_time = vehicle.entry_time.strftime("%I:%M %p")
-            formatted_exit_time = vehicle.exit_time.strftime("%I:%M %p")
+
+            entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
+            exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
+
+            formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
+            formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
 
             return {
                 "vehicle_number": vehicle.vehicle_number,
@@ -97,23 +104,25 @@ class VehicleRegistrationController:
             statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
             results = session.exec(statement).all()
 
+        parking_fee=50
         vehicle_registrations = []
         for vehicle, spot in results:
-            exit_time = vehicle.exit_time if vehicle.exit_time else None
-            parking_fee = 0
+            entry_time = vehicle.entry_time
+            exit_time = vehicle.exit_time
             
             if vehicle.entry_time and exit_time:
                 duration = exit_time - vehicle.entry_time
                 hours_parked = max(1, duration.total_seconds() // 3600)
                 parking_fee = int(hours_parked * 50)  
-            else:
-                parking_fee=50    
+
+            formatted_entry_time = entry_time.strftime("%I:%M %p") if entry_time else None
+            formatted_exit_time = exit_time.strftime("%I:%M %p")   if exit_time else None
 
             vehicle_registration = {
                 "id": vehicle.id,
                 "vehicle_number": vehicle.vehicle_number,
-                "entry_time": vehicle.entry_time,
-                "exit_time": exit_time,
+                "entry_time": formatted_entry_time,
+                "exit_time": formatted_exit_time,
                 "parking_fee": parking_fee,
                 "parking_spot": {
                     "id": spot.id,

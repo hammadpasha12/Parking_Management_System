@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 class ParkingSpot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     slot: int = Field(..., ge=1, le=20)  
-    status: str = Field(default="available")  
-    vehicles: List["VehicleRegistration"] = Relationship(back_populates="parking_spot")  
+    status: str = Field(default="available")
+    vehicles: List["VehicleRegistration"] = Relationship(back_populates="parking_spot")
 
 class VehicleRegistration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -24,7 +24,7 @@ class ParkingSpotResponse(SQLModel):
 class VehicleRegistrationResponse(SQLModel):
     id: Optional[int]
     vehicle_number: str
-    exit_time: Optional[datetime]  
+    exit_time: Optional[str]  
     parking_fee: Optional[int]  
-    entry_time: datetime
+    entry_time: Optional[str]
     parking_spot: Optional[ParkingSpotResponse]

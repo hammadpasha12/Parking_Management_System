@@ -1,9 +1,7 @@
-from fastapi import APIRouter,HTTPException
+from fastapi import APIRouter
 from app.controllers.parking_controller import ParkingController,VehicleRegistrationController
 from app.models.parking_spot import ParkingSpot,VehicleRegistration,VehicleRegistrationResponse
 from typing import List
-from sqlmodel import Session, select
-from app.database import engine
 
 
 router = APIRouter()
