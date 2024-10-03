@@ -4,9 +4,21 @@ from fastapi import HTTPException
 from app.models.parking_spot import ParkingSpot,VehicleRegistration
 from app.database import engine
 import pytz
+from collections import deque
 
 PST = pytz.timezone('Asia/Karachi')
 
+def initialize_parking_slots():
+    with Session(engine) as session:
+        existing_spots = session.exec(select(ParkingSpot)).all()
+        
+        if len(existing_spots) < 20:
+            existing_slot_numbers = {spot.slot for spot in existing_spots}
+            for slot_num in range(1, 21):
+                if slot_num not in existing_slot_numbers:
+                    new_spot = ParkingSpot(slot=slot_num, status="available")
+                    session.add(new_spot)
+            session.commit()
 class ParkingController:
     @staticmethod
     def create_parking_spot(parking_spot: ParkingSpot):
@@ -25,7 +37,15 @@ class ParkingController:
     @staticmethod
     def read_parking_spots():
         with Session(engine) as session:
-            return session.exec(select(ParkingSpot)).all()
+            parking_spots = session.exec(select(ParkingSpot)).all()
+            
+            if len(parking_spots) < 20:
+                existing_slots = {spot.slot for spot in parking_spots}
+                for slot_num in range(1, 21):
+                    if slot_num not in existing_slots:
+                        parking_spots.append(ParkingSpot(id=slot_num, slot=slot_num, status="available"))
+            
+            return parking_spots
     
     @staticmethod
     def delete_parking_spot(slot_id: int):
@@ -34,9 +54,16 @@ class ParkingController:
             if not spot_del:
                 raise HTTPException(status_code=404, detail="Slot not found.")
             
-            session.delete(spot_del)
+            # session.delete(spot_del)
+            spot_del.status = "available"
             session.commit()
-            return {"message": f"Parking spot {slot_id} has been deleted."}
+
+            next_vehicle = VehicleRegistrationController.process_waiting_queue()
+
+            if next_vehicle:
+                return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
+            
+            return {"message": f"Parking spot {slot_id} has been deleted and is now available."}
         
     @staticmethod
     def get_vehicle_fee(vehicle_id: int, rate_per_hour: int = 50):
@@ -71,6 +98,9 @@ class ParkingController:
             }
     
 class VehicleRegistrationController:
+
+    waiting_queue=deque()
+
     @staticmethod
     def create_vehicle_registration(vehicle_registration: VehicleRegistration):
         with Session(engine) as session:
@@ -81,17 +111,17 @@ class VehicleRegistrationController:
             if existing_vehicle:
                 raise HTTPException(status_code=400, detail="Vehicle is already registered.")
 
-            parking_spot = session.exec(
-                select(ParkingSpot).where(ParkingSpot.id == vehicle_registration.parking_spot_id)
-            ).first()
+            available_spot = session.exec(
+                select(ParkingSpot).where(ParkingSpot.status == "available")
+            ).first()    
             
-            if not parking_spot:
-                raise HTTPException(status_code=404, detail="Parking spot not found.")
+            if not available_spot:
+                VehicleRegistrationController.waiting_queue.append(vehicle_registration)
+                raise HTTPException(status_code=400, detail="All slots are full. Your vehicle are added to the queue.")
             
-            if parking_spot.status == "occupied":
-                raise HTTPException(status_code=400, detail="Parking spot is already occupied.")
+            available_spot.status="occupied"
+            vehicle_registration.parking_spot_id = available_spot.id
 
-            parking_spot.status = "occupied"
             
             session.add(vehicle_registration)
             session.commit()
@@ -134,6 +164,25 @@ class VehicleRegistrationController:
 
         return vehicle_registrations
 
+
+    @staticmethod
+    def process_waiting_queue():
+        if VehicleRegistrationController.waiting_queue:
+            next_vehicle= VehicleRegistrationController.waiting_queue.popleft()
+            
+            with Session(engine) as session:
+                available_spot = session.exec(
+                    select(ParkingSpot).where(ParkingSpot.status == "available")
+                ).first()
+
+                if available_spot:
+                    available_spot.status = "occupied"
+                    next_vehicle.parking_spot_id = available_spot.id
+                    session.add(next_vehicle)
+                    session.commit()
+
+                return next_vehicle    
+
     @staticmethod
     def delete_vehicle_registration(vehicle_id: int):
         with Session(engine) as session:
@@ -152,4 +201,4 @@ class VehicleRegistrationController:
             session.delete(vehicle)
             session.commit()
 
-            return {"message": f"Vehicle registration {vehicle_id} has been deleted."}
+            return {"message": f"Vehicle registration {vehicle_id} has been deleted."} 

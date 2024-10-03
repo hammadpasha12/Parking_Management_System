@@ -10,9 +10,9 @@ router = APIRouter()
 def hello():
     return {"message": "Parking System Management"}
 
-@router.post("/slots/", response_model=ParkingSpot)
-def create_parking_spot(parking_spot: ParkingSpot):
-    return ParkingController.create_parking_spot(parking_spot)
+# @router.post("/slots/", response_model=ParkingSpot)
+# def create_parking_spot(parking_spot: ParkingSpot):
+#     return ParkingController.create_parking_spot(parking_spot)
 
 @router.get("/slots/", response_model=List[ParkingSpot])
 def read_parking_spots():
@@ -42,3 +42,14 @@ def delete_vehicle_registration(vehicle_id: int):
 @router.get("/vehicle-registration/{vehicle_id}/calculate-fee", response_model=dict)
 def calculate_parking_fee(vehicle_id: int):
     return ParkingController.get_vehicle_fee(vehicle_id)
+
+@router.get("/queue-status")
+def get_queue_status():
+    return {"queue_length": len(VehicleRegistrationController.waiting_queue)}
+
+@router.post("/process-queue")
+def process_queue():
+    next_vehicle = VehicleRegistrationController.process_waiting_queue()
+    if next_vehicle:
+        return {"message": f"Next vehicle {next_vehicle.vehicle_number} has been assigned to a spot."}
+    return {"message": "No vehicles in the queue."}
