@@ -182,7 +182,7 @@ class VehicleRegistrationController:
                     session.commit()
 
                 return next_vehicle    
-
+            
     @staticmethod
     def delete_vehicle_registration(vehicle_id: int, rate_per_hour: int = 50):
         with Session(engine) as session:
@@ -191,23 +191,22 @@ class VehicleRegistrationController:
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehicle registration not found.")
 
-        # Set exit time to now and calculate fee
-        vehicle.exit_time = datetime.now(timezone.utc)    
-        
-        if vehicle.exit_time and vehicle.entry_time:
-            duration = vehicle.exit_time - vehicle.entry_time
+        vehicle.exit_time = datetime.now(timezone.utc)
+        entry_time_aware = vehicle.entry_time if vehicle.entry_time.tzinfo else vehicle.entry_time.replace(tzinfo=timezone.utc)
+        exit_time_aware = vehicle.exit_time
+
+        if exit_time_aware and entry_time_aware:
+            duration = exit_time_aware - entry_time_aware
             hours_parked = max(1, duration.total_seconds() // 3600)
             parking_fee = int(hours_parked * rate_per_hour)
         else:
             parking_fee = 50
 
-        # Format times to PST timezone
-        entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
-        exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
+        entry_time_pst = entry_time_aware.astimezone(PST) if vehicle.entry_time else None
+        exit_time_pst = exit_time_aware.astimezone(PST) if vehicle.exit_time else None
         formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
-        formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None   
+        formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
 
-        # Prepare response data before deleting the vehicle
         response_data = {
             "vehicle_number": vehicle.vehicle_number,
             "entry_time": formatted_entry_time,
@@ -215,11 +214,10 @@ class VehicleRegistrationController:
             "parking_fee": parking_fee
         }
 
-        # Now delete the vehicle registration
+
         session.delete(vehicle)
         session.commit()
 
-        # Return the message along with vehicle details
         return {
             "message": f"Vehicle registration {vehicle_id} has been deleted.",
             "vehicle_details": response_data
