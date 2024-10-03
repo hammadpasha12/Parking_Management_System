@@ -184,21 +184,43 @@ class VehicleRegistrationController:
                 return next_vehicle    
 
     @staticmethod
-    def delete_vehicle_registration(vehicle_id: int):
+    def delete_vehicle_registration(vehicle_id: int, rate_per_hour: int = 50):
         with Session(engine) as session:
             vehicle = session.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
 
-            if not vehicle:
-                raise HTTPException(status_code=404, detail="Vehicle registration not found.")
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Vehicle registration not found.")
 
-            parking_spot = session.exec(
-                select(ParkingSpot).where(ParkingSpot.id == vehicle.parking_spot_id)
-            ).first()
-            
-            if parking_spot:
-                parking_spot.status = "available"
-            
-            session.delete(vehicle)
-            session.commit()
+        # Set exit time to now and calculate fee
+        vehicle.exit_time = datetime.now(timezone.utc)    
+        
+        if vehicle.exit_time and vehicle.entry_time:
+            duration = vehicle.exit_time - vehicle.entry_time
+            hours_parked = max(1, duration.total_seconds() // 3600)
+            parking_fee = int(hours_parked * rate_per_hour)
+        else:
+            parking_fee = 50
 
-            return {"message": f"Vehicle registration {vehicle_id} has been deleted."} 
+        # Format times to PST timezone
+        entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
+        exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
+        formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
+        formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None   
+
+        # Prepare response data before deleting the vehicle
+        response_data = {
+            "vehicle_number": vehicle.vehicle_number,
+            "entry_time": formatted_entry_time,
+            "exit_time": formatted_exit_time,
+            "parking_fee": parking_fee
+        }
+
+        # Now delete the vehicle registration
+        session.delete(vehicle)
+        session.commit()
+
+        # Return the message along with vehicle details
+        return {
+            "message": f"Vehicle registration {vehicle_id} has been deleted.",
+            "vehicle_details": response_data
+        }

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.controllers.parking_controller import ParkingController,VehicleRegistrationController
 from app.models.parking_spot import ParkingSpot,VehicleRegistration,VehicleRegistrationResponse
-from typing import List
+from typing import List,Dict,Any
 
 
 router = APIRouter()
@@ -34,7 +34,7 @@ def create_vehicle_registration(vehicle_registration: VehicleRegistration):
 def get_vehicle_registrations():
     return VehicleRegistrationController.read_vehicle_registrations()
 
-@router.delete("/vehicle-registration/{vehicle_id}")
+@router.delete("/vehicle-registration/{vehicle_id}",response_model=Dict[str,Any])
 def delete_vehicle_registration(vehicle_id: int):
     return VehicleRegistrationController.delete_vehicle_registration(vehicle_id)
 
