@@ -34,9 +34,9 @@ def create_vehicle_registration(vehicle_registration: VehicleRegistration):
 def get_vehicle_registrations():
     return VehicleRegistrationController.read_vehicle_registrations()
 
-@router.delete("/vehicle-registration/{vehicle_id}",response_model=Dict[str,Any])
-def delete_vehicle_registration(vehicle_id: int):
-    return VehicleRegistrationController.delete_vehicle_registration(vehicle_id)
+@router.delete("/vehicle-registration/{slot_number}",response_model=Dict[str,Any])
+def delete_vehicle_registration(slot_number: int):
+    return VehicleRegistrationController.delete_vehicle_registration(slot_number)
 
 
 @router.get("/vehicle-registration/{vehicle_id}/fee", response_model=dict)
@@ -47,9 +47,3 @@ def calculate_parking_fee(vehicle_id: int):
 def get_queue_status():
     return {"queue_length": len(VehicleRegistrationController.waiting_queue)}
 
-@router.post("/process-queue")
-def process_queue():
-    next_vehicle = VehicleRegistrationController.process_waiting_queue()
-    if next_vehicle:
-        return {"message": f"Next vehicle {next_vehicle.vehicle_number} has been assigned to a spot."}
-    return {"message": "No vehicles in the queue."}

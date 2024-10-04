@@ -21,7 +21,6 @@ class ParkingController:
                 raise HTTPException(status_code=400, detail="Slot is already filled.")
             
             new_spot = ParkingSpot(slot=parking_spot.slot, status="available")
-            print("new spot====>",new_spot)
             session.add(new_spot)
             session.commit()
             session.refresh(new_spot)
@@ -45,11 +44,10 @@ class ParkingController:
             session.commit()
 
             remaining_spots = session.exec(select(ParkingSpot)).all()
-            print("Remaining spot--------------->",remaining_spots)
 
             if not remaining_spots:
                 reset_sequence_query= text("ALTER SEQUENCE parkingspot_id_seq RESTART WITH 1")
-                session.execute(reset_sequence_query)
+                session.exec(reset_sequence_query)
                 session.commit()
 
             next_vehicle = VehicleRegistrationController.process_waiting_queue()
@@ -178,9 +176,14 @@ class VehicleRegistrationController:
                 return next_vehicle    
             
     @staticmethod
-    def delete_vehicle_registration(vehicle_id: int, rate_per_hour: int = 50):
+    def delete_vehicle_registration(slot_number: int, rate_per_hour: int = 50):
         with Session(engine) as session:
-            vehicle = session.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
+            parking_spot = session.exec(select(ParkingSpot).where(ParkingSpot.slot == slot_number)).first()
+
+        if not parking_spot or parking_spot.status != "occupied":
+            raise HTTPException(status_code=404, detail="Parking spot is not occupied or does not exist.")
+
+        vehicle = session.exec(select(VehicleRegistration).where(VehicleRegistration.parking_spot_id == parking_spot.id)).first()
 
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehicle registration not found.")
@@ -207,17 +210,13 @@ class VehicleRegistrationController:
             "exit_time": formatted_exit_time,
             "parking_fee": parking_fee
         }
-        
-        parking_spot = session.exec(select(ParkingSpot).where(ParkingSpot.id == vehicle.parking_spot_id)).first()
-        if parking_spot:
-            parking_spot.status= "available"
 
-
+        parking_spot.status = "available"
 
         session.delete(vehicle)
         session.commit()
 
         return {
-            "message": f"Vehicle registration {vehicle_id} has been deleted.",
+            "message": f"Vehicle registration in slot {slot_number} has been deleted.",
             "vehicle_details": response_data
         }
