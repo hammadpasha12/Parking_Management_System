@@ -43,10 +43,10 @@ class ParkingController:
             spot_del.status = "available"
             session.commit()
 
-            # next_vehicle = VehicleRegistrationController.process_waiting_queue()
+            next_vehicle = VehicleRegistrationController.process_waiting_queue()
 
-            # if next_vehicle:
-            #     return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
+            if next_vehicle:
+                return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
             
             return {"message": f"Parking spot {slot_id} has been deleted and is now available."}
         
@@ -198,6 +198,10 @@ class VehicleRegistrationController:
             "exit_time": formatted_exit_time,
             "parking_fee": parking_fee
         }
+        
+        parking_spot = session.exec(select(ParkingSpot).where(ParkingSpot.id == vehicle.parking_spot_id)).first()
+        if parking_spot:
+            parking_spot.status= "available"
 
 
         session.delete(vehicle)
