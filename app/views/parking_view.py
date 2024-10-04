@@ -39,7 +39,7 @@ def delete_vehicle_registration(vehicle_id: int):
     return VehicleRegistrationController.delete_vehicle_registration(vehicle_id)
 
 
-@router.get("/vehicle-registration/{vehicle_id}/calculate-fee", response_model=dict)
+@router.get("/vehicle-registration/{vehicle_id}/fee", response_model=dict)
 def calculate_parking_fee(vehicle_id: int):
     return ParkingController.get_vehicle_fee(vehicle_id)
 

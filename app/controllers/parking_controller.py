@@ -5,6 +5,7 @@ from app.models.parking_spot import ParkingSpot,VehicleRegistration
 from app.database import engine
 import pytz
 from collections import deque
+from sqlalchemy import text
 
 PST = pytz.timezone('Asia/Karachi')
 
@@ -43,12 +44,20 @@ class ParkingController:
             spot_del.status = "available"
             session.commit()
 
+            remaining_spots = session.exec(select(ParkingSpot)).all()
+            print("Remaining spot--------------->",remaining_spots)
+
+            if not remaining_spots:
+                reset_sequence_query= text("ALTER SEQUENCE parkingspot_id_seq RESTART WITH 1")
+                session.execute(reset_sequence_query)
+                session.commit()
+
             next_vehicle = VehicleRegistrationController.process_waiting_queue()
 
             if next_vehicle:
                 return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
             
-            return {"message": f"Parking spot {slot_id} has been deleted and is now available."}
+            return {"message": f"Parking spot {slot_id} has been deleted"}
         
     @staticmethod
     def get_vehicle_fee(vehicle_id: int, rate_per_hour: int = 50):
@@ -202,6 +211,7 @@ class VehicleRegistrationController:
         parking_spot = session.exec(select(ParkingSpot).where(ParkingSpot.id == vehicle.parking_spot_id)).first()
         if parking_spot:
             parking_spot.status= "available"
+
 
 
         session.delete(vehicle)
