@@ -47,3 +47,7 @@ def calculate_parking_fee(vehicle_id: int):
 def get_queue_status():
     return {"queue_length": len(VehicleRegistrationController.waiting_queue)}
 
+
+@router.get("/all-vehicle-records", response_model=List[dict])
+def get_all_vehicle_records():
+    return VehicleRegistrationController.get_all_vehicle_records()

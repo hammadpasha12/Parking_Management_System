@@ -85,7 +85,7 @@ class ParkingController:
                 "vehicle_number": vehicle.vehicle_number,
                 "parking_spot_id": vehicle.parking_spot_id,
                 "exit_time": formatted_exit_time,
-                "entry_time": formatted_entry_time,
+                "entry_time": formatted_entry_time, 
                 "parking_fee": parking_fee
             }
     
@@ -212,6 +212,7 @@ class VehicleRegistrationController:
         }
 
         parking_spot.status = "available"
+        session.add(parking_spot)
 
         session.delete(vehicle)
         session.commit()
@@ -220,3 +221,54 @@ class VehicleRegistrationController:
             "message": f"Vehicle registration in slot {slot_number} has been deleted.",
             "vehicle_details": response_data
         }
+
+    @staticmethod
+    def get_all_vehicle_records():
+        with Session(engine) as session:
+            
+            statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
+            results = session.exec(statement).all()
+
+        vehicle_records = []
+
+        for vehicle, spot in results:
+            entry_time = vehicle.entry_time
+            exit_time = vehicle.exit_time
+
+            if vehicle.entry_time and exit_time:
+                duration = exit_time - vehicle.entry_time
+                hours_parked = max(1, duration.total_seconds() // 3600)
+                parking_fee = int(hours_parked * 50)
+            else:
+                parking_fee = 50
+
+            formatted_entry_time = entry_time.strftime("%I:%M %p") if entry_time else None
+            formatted_exit_time = exit_time.strftime("%I:%M %p") if exit_time else None
+
+            vehicle_record = {
+                "id": vehicle.id,
+                "vehicle_number": vehicle.vehicle_number,
+                "entry_time": formatted_entry_time,
+                "exit_time": formatted_exit_time,
+                "parking_fee": parking_fee,
+                "status": "exited" if exit_time else "parked",
+                "parking_spot": {
+                    "id": spot.id,
+                    "slot": spot.slot,
+                    "status": spot.status
+                }
+            }
+            vehicle_records.append(vehicle_record)
+
+        for vehicle in VehicleRegistrationController.waiting_queue:
+            vehicle_record = {
+                "vehicle_number": vehicle.vehicle_number,
+                "status": "in queue",
+                "entry_time": None,
+                "exit_time": None,
+                "parking_spot": None,
+                "parking_fee": None
+            }
+            vehicle_records.append(vehicle_record)
+
+        return vehicle_records
