@@ -8,43 +8,28 @@ from collections import deque
 
 PST = pytz.timezone('Asia/Karachi')
 
-def initialize_parking_slots():
-    with Session(engine) as session:
-        existing_spots = session.exec(select(ParkingSpot)).all()
-        
-        if len(existing_spots) < 20:
-            existing_slot_numbers = {spot.slot for spot in existing_spots}
-            for slot_num in range(1, 21):
-                if slot_num not in existing_slot_numbers:
-                    new_spot = ParkingSpot(slot=slot_num, status="available")
-                    session.add(new_spot)
-            session.commit()
+
 class ParkingController:
     @staticmethod
     def create_parking_spot(parking_spot: ParkingSpot):
         if parking_spot.slot > 20:
             raise HTTPException(status_code=400, detail="Slot number cannot exceed 20.")
-        with Session(engine) as session:
+        with Session(engine) as session:    
             existing_spot = session.exec(select(ParkingSpot).where(ParkingSpot.slot == parking_spot.slot)).first()
             if existing_spot:
                 raise HTTPException(status_code=400, detail="Slot is already filled.")
             
-            session.add(parking_spot)
+            new_spot = ParkingSpot(slot=parking_spot.slot, status="available")
+            print("new spot====>",new_spot)
+            session.add(new_spot)
             session.commit()
-            session.refresh(parking_spot)
-            return parking_spot
+            session.refresh(new_spot)
+            return new_spot
 
     @staticmethod
     def read_parking_spots():
         with Session(engine) as session:
             parking_spots = session.exec(select(ParkingSpot)).all()
-            
-            if len(parking_spots) < 20:
-                existing_slots = {spot.slot for spot in parking_spots}
-                for slot_num in range(1, 21):
-                    if slot_num not in existing_slots:
-                        parking_spots.append(ParkingSpot(id=slot_num, slot=slot_num, status="available"))
-            
             return parking_spots
     
     @staticmethod
@@ -54,14 +39,14 @@ class ParkingController:
             if not spot_del:
                 raise HTTPException(status_code=404, detail="Slot not found.")
             
-            # session.delete(spot_del)
+            session.delete(spot_del)
             spot_del.status = "available"
             session.commit()
 
-            next_vehicle = VehicleRegistrationController.process_waiting_queue()
+            # next_vehicle = VehicleRegistrationController.process_waiting_queue()
 
-            if next_vehicle:
-                return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
+            # if next_vehicle:
+            #     return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
             
             return {"message": f"Parking spot {slot_id} has been deleted and is now available."}
         
