@@ -63,7 +63,10 @@ class ParkingController:
             next_vehicle = VehicleRegistrationController.process_waiting_queue(db)
 
             if next_vehicle:
-                return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
+                return{
+                    "message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue.",
+                    "next_vehicle": next_vehicle  
+                    }
             
             return {"message": f"Parking spot {slot_id} has been deleted"}
         
