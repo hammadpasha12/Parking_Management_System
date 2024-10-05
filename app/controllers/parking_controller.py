@@ -1,54 +1,54 @@
 from datetime import datetime, timezone
 from sqlmodel import Session, select
-from fastapi import HTTPException
+from fastapi import HTTPException,Depends
 from app.models.parking_spot import ParkingSpot,VehicleRegistration
-from app.database import engine
+from app.database import engine,get_db
 import pytz
 from collections import deque
 from sqlalchemy import text
+
 
 PST = pytz.timezone('Asia/Karachi')
 
 
 class ParkingController:
     @staticmethod
-    def create_parking_spot(parking_spot: ParkingSpot):
+    def create_parking_spot(parking_spot: ParkingSpot,db:Session = Depends(get_db)):
         if parking_spot.slot > 20:
             raise HTTPException(status_code=400, detail="Slot number cannot exceed 20.")
-        with Session(engine) as session:    
-            existing_spot = session.exec(select(ParkingSpot).where(ParkingSpot.slot == parking_spot.slot)).first()
-            if existing_spot:
-                raise HTTPException(status_code=400, detail="Slot is already filled.")
             
-            new_spot = ParkingSpot(slot=parking_spot.slot, status="available")
-            session.add(new_spot)
-            session.commit()
-            session.refresh(new_spot)
-            return new_spot
+        existing_spot = db.exec(select(ParkingSpot).where(ParkingSpot.slot == parking_spot.slot)).first()
+        if existing_spot:
+            raise HTTPException(status_code=400, detail="Slot is already filled.")
+            
+        new_spot = ParkingSpot(slot=parking_spot.slot, status="available")
+        db.add(new_spot)
+        db.commit()
+        db.refresh(new_spot)
+        return new_spot
 
     @staticmethod
-    def read_parking_spots():
-        with Session(engine) as session:
-            parking_spots = session.exec(select(ParkingSpot)).all()
-            return parking_spots
+    def read_parking_spots(db:Session = Depends(get_db)):
+        parking_spots = db.exec(select(ParkingSpot)).all()
+        return parking_spots
     
     @staticmethod
-    def delete_parking_spot(slot_id: int):
-        with Session(engine) as session:
-            spot_del = session.exec(select(ParkingSpot).where(ParkingSpot.id == slot_id)).first()
-            if not spot_del:
-                raise HTTPException(status_code=404, detail="Slot not found.")
+    def delete_parking_spot(slot_id: int,db:Session = Depends(get_db)):
+        
+        spot_del = db.exec(select(ParkingSpot).where(ParkingSpot.id == slot_id)).first()
+        if not spot_del:
+            raise HTTPException(status_code=404, detail="Slot not found.")
             
-            session.delete(spot_del)
-            spot_del.status = "available"
-            session.commit()
+        db.delete(spot_del)
+        spot_del.status = "available"
+        db.commit()
 
-            remaining_spots = session.exec(select(ParkingSpot)).all()
+        remaining_spots = db.exec(select(ParkingSpot)).all()
 
-            if not remaining_spots:
-                reset_sequence_query= text("ALTER SEQUENCE parkingspot_id_seq RESTART WITH 1")
-                session.exec(reset_sequence_query)
-                session.commit()
+        if not remaining_spots:
+            reset_sequence_query= text("ALTER SEQUENCE parkingspot_id_seq RESTART WITH 1")
+            db.exec(reset_sequence_query)
+            db.commit()
 
             next_vehicle = VehicleRegistrationController.process_waiting_queue()
 
@@ -58,35 +58,35 @@ class ParkingController:
             return {"message": f"Parking spot {slot_id} has been deleted"}
         
     @staticmethod
-    def get_vehicle_fee(vehicle_id: int, rate_per_hour: int = 50):
-        with Session(engine) as session:
-            vehicle = session.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
+    def get_vehicle_fee(vehicle_id: int, rate_per_hour: int = 50,db:Session = Depends(get_db)):
+        
+        vehicle = db.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
             
-            if not vehicle:
-                raise HTTPException(status_code=404, detail="Vehicle not found.")
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Vehicle not found.")
 
-            vehicle.exit_time = datetime.now(timezone.utc)
+        vehicle.exit_time = datetime.now(timezone.utc)
 
-            if vehicle.exit_time and vehicle.entry_time:
-                duration = vehicle.exit_time - vehicle.entry_time
-                hours_parked = max(1, duration.total_seconds() // 3600)
-                parking_fee = int(hours_parked * rate_per_hour)
-            else:
-                parking_fee = 50
+        if vehicle.exit_time and vehicle.entry_time:
+            duration = vehicle.exit_time - vehicle.entry_time
+            hours_parked = max(1, duration.total_seconds() // 3600)
+            parking_fee = int(hours_parked * rate_per_hour)
+        else:
+            parking_fee = 50
 
 
-            entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
-            exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
+        entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
+        exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
 
-            formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
-            formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
+        formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
+        formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
 
-            return {
-                "vehicle_number": vehicle.vehicle_number,
-                "parking_spot_id": vehicle.parking_spot_id,
-                "exit_time": formatted_exit_time,
-                "entry_time": formatted_entry_time, 
-                "parking_fee": parking_fee
+        return {
+            "vehicle_number": vehicle.vehicle_number,
+            "parking_spot_id": vehicle.parking_spot_id,
+            "exit_time": formatted_exit_time,
+            "entry_time": formatted_entry_time, 
+            "parking_fee": parking_fee
             }
     
 class VehicleRegistrationController:
@@ -94,37 +94,36 @@ class VehicleRegistrationController:
     waiting_queue=deque()
 
     @staticmethod
-    def create_vehicle_registration(vehicle_registration: VehicleRegistration):
-        with Session(engine) as session:
-            existing_vehicle = session.exec(
-                select(VehicleRegistration).where(VehicleRegistration.vehicle_number == vehicle_registration.vehicle_number)
-            ).first()
+    def create_vehicle_registration(vehicle_registration: VehicleRegistration,db:Session = Depends(get_db)):
+        
+        existing_vehicle = db.exec(
+            select(VehicleRegistration).where(VehicleRegistration.vehicle_number == vehicle_registration.vehicle_number)
+        ).first()
 
-            if existing_vehicle:
-                raise HTTPException(status_code=400, detail="Vehicle is already registered.")
+        if existing_vehicle:
+            raise HTTPException(status_code=400, detail="Vehicle is already registered.")
 
-            available_spot = session.exec(
-                select(ParkingSpot).where(ParkingSpot.status == "available")
-            ).first()    
+        available_spot = db.exec(
+            select(ParkingSpot).where(ParkingSpot.status == "available")
+        ).first()    
             
-            if not available_spot:
-                VehicleRegistrationController.waiting_queue.append(vehicle_registration)
-                raise HTTPException(status_code=400, detail="All slots are full. Your vehicle are added to the queue.")
+        if not available_spot:
+            VehicleRegistrationController.waiting_queue.append(vehicle_registration)
+            raise HTTPException(status_code=400, detail="All slots are full. Your vehicle are added to the queue.")
             
-            available_spot.status="occupied"
-            vehicle_registration.parking_spot_id = available_spot.id
+        available_spot.status="occupied"
+        vehicle_registration.parking_spot_id = available_spot.id
 
             
-            session.add(vehicle_registration)
-            session.commit()
-            session.refresh(vehicle_registration)
-            return vehicle_registration
+        db.add(vehicle_registration)
+        db.commit()
+        db.refresh(vehicle_registration)
+        return vehicle_registration
 
     @staticmethod
-    def read_vehicle_registrations():
-        with Session(engine) as session:
-            statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
-            results = session.exec(statement).all()
+    def read_vehicle_registrations(db:Session = Depends(get_db)):
+        statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
+        results = db.exec(statement).all()
 
         parking_fee=50
         vehicle_registrations = []
@@ -158,32 +157,31 @@ class VehicleRegistrationController:
 
 
     @staticmethod
-    def process_waiting_queue():
+    def process_waiting_queue(db:Session = Depends(get_db)):
         if VehicleRegistrationController.waiting_queue:
             next_vehicle= VehicleRegistrationController.waiting_queue.popleft()
             
-            with Session(engine) as session:
-                available_spot = session.exec(
+            available_spot = db.exec(
                     select(ParkingSpot).where(ParkingSpot.status == "available")
-                ).first()
+            ).first()
 
-                if available_spot:
-                    available_spot.status = "occupied"
-                    next_vehicle.parking_spot_id = available_spot.id
-                    session.add(next_vehicle)
-                    session.commit()
+            if available_spot:
+                available_spot.status = "occupied"
+                next_vehicle.parking_spot_id = available_spot.id
+                db.add(next_vehicle)
+                db.commit()
 
                 return next_vehicle    
             
     @staticmethod
-    def delete_vehicle_registration(slot_number: int, rate_per_hour: int = 50):
-        with Session(engine) as session:
-            parking_spot = session.exec(select(ParkingSpot).where(ParkingSpot.slot == slot_number)).first()
+    def delete_vehicle_registration(slot_number: int, rate_per_hour: int = 50,db:Session = Depends(get_db)):
+        
+        parking_spot = db.exec(select(ParkingSpot).where(ParkingSpot.slot == slot_number)).first()
 
         if not parking_spot or parking_spot.status != "occupied":
             raise HTTPException(status_code=404, detail="Parking spot is not occupied or does not exist.")
 
-        vehicle = session.exec(select(VehicleRegistration).where(VehicleRegistration.parking_spot_id == parking_spot.id)).first()
+        vehicle = db.exec(select(VehicleRegistration).where(VehicleRegistration.parking_spot_id == parking_spot.id)).first()
 
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehicle registration not found.")
@@ -212,10 +210,10 @@ class VehicleRegistrationController:
         }
 
         parking_spot.status = "available"
-        session.add(parking_spot)
+        db.add(parking_spot)
 
-        session.delete(vehicle)
-        session.commit()
+        db.delete(vehicle)
+        db.commit()
 
         return {
             "message": f"Vehicle registration in slot {slot_number} has been deleted.",
@@ -223,11 +221,9 @@ class VehicleRegistrationController:
         }
 
     @staticmethod
-    def get_all_vehicle_records():
-        with Session(engine) as session:
-            
-            statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
-            results = session.exec(statement).all()
+    def get_all_vehicle_records(db:Session = Depends(get_db)):            
+        statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
+        results = db.exec(statement).all()
 
         vehicle_records = []
 
