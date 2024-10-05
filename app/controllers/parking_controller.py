@@ -43,7 +43,7 @@ class ParkingController:
             raise HTTPException(status_code=500,detail=f"An error occured in read_parking_spots:{e} ")
     
     @staticmethod
-    def delete_parking_spot(slot_id: int,db:Session):
+    def delete_parking_spot(slot_id: int, db: Session):
         try:
             spot_del = db.exec(select(ParkingSpot).where(ParkingSpot.id == slot_id)).first()
             if not spot_del:
@@ -60,7 +60,7 @@ class ParkingController:
                 db.exec(reset_sequence_query)
                 db.commit()
 
-            next_vehicle = VehicleRegistrationController.process_waiting_queue()
+            next_vehicle = VehicleRegistrationController.process_waiting_queue(db)
 
             if next_vehicle:
                 return{"message":f"Slot {slot_id} is now available and assigned to the next vehicle in the queue."}
@@ -182,7 +182,7 @@ class VehicleRegistrationController:
 
 
     @staticmethod
-    def process_waiting_queue(db:Session = Depends(get_db)):
+    def process_waiting_queue(db:Session):
         try:
             if VehicleRegistrationController.waiting_queue:
                 next_vehicle= VehicleRegistrationController.waiting_queue.popleft()
