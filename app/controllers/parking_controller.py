@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timezone
 from sqlmodel import Session, select
 from fastapi import HTTPException,Depends
@@ -6,7 +7,6 @@ from app.database import get_db
 from collections import deque
 from sqlalchemy import text
 from zoneinfo import ZoneInfo
-
 
 PST = ZoneInfo('Asia/Karachi')
 
@@ -156,7 +156,7 @@ class VehicleRegistrationController:
             
                 if entry_time and exit_time:
                     duration = exit_time - vehicle.entry_time
-                    hours_parked = max(1, duration.total_seconds() // 3600)
+                    hours_parked = math.ceil(duration.total_seconds() // 3600)
                     parking_fee = int(hours_parked * 50)  
 
                 formatted_entry_time = entry_time.strftime("%I:%M %p") if entry_time else None
@@ -220,7 +220,7 @@ class VehicleRegistrationController:
 
             if exit_time_aware and entry_time_aware:
                 duration = exit_time_aware - entry_time_aware
-                hours_parked = max(1, duration.total_seconds() // 3600)
+                hours_parked = math.ceil(duration.total_seconds() // 3600)
                 parking_fee = int(hours_parked * rate_per_hour)
             else:
                 parking_fee = 50
@@ -268,7 +268,7 @@ class VehicleRegistrationController:
 
             if vehicle.entry_time and exit_time:
                 duration = exit_time - vehicle.entry_time
-                hours_parked = max(1, duration.total_seconds() // 3600)
+                hours_parked = math.ceil( duration.total_seconds() // 3600)
                 parking_fee = int(hours_parked * 50)
             else:
                 parking_fee = 50
