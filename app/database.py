@@ -1,7 +1,6 @@
 import os
 from sqlmodel import create_engine, SQLModel,Session
 from dotenv import load_dotenv
-from fastapi import Depends
 
 load_dotenv()
 
