@@ -17,7 +17,9 @@ class ParkingController:
             if parking_spot.slot > 20:
                 raise HTTPException(status_code=400, detail="Slot number cannot exceed 20.")
             
-            existing_spot = db.exec(select(ParkingSpot).where(ParkingSpot.slot == parking_spot.slot)).first()
+            query = text("SELECT id FROM parkingspot WHERE slot = :slot")
+            existing_spot = db.execute(query, {'slot': parking_spot.slot}).fetchone()
+            # existing_spot = db.exec(select(ParkingSpot).where(ParkingSpot.slot == parking_spot.slot)).first()
             if existing_spot:
                 raise HTTPException(status_code=400,detail="Slot is already filled.")
             
@@ -37,7 +39,9 @@ class ParkingController:
     @staticmethod
     def read_parking_spots(db:Session):
         try:
-            parking_spots = db.exec(select(ParkingSpot)).all()
+            query = text("SELECT id,slot,status FROM parkingspot")
+            parking_spots = db.execute(query).fetchall()
+            # parking_spots = db.exec(select(ParkingSpot)).all()
             return parking_spots
         except Exception as e:
             raise HTTPException(status_code=500,detail=f"An error occured in read_parking_spots:{e} ")
@@ -45,22 +49,33 @@ class ParkingController:
     @staticmethod
     def delete_parking_spot(slot_id: int, db: Session):
         try:
-            spot_del = db.exec(select(ParkingSpot).where(ParkingSpot.id == slot_id)).first()
+            query = text("SELECT id, status FROM parkingspot WHERE id = :slot_id")
+            spot_del = db.execute(query,{'slot_id':slot_id}).fetchone()
+            # spot_del = db.exec(select(ParkingSpot).where(ParkingSpot.id == slot_id)).first()
             if not spot_del:
                 raise HTTPException(status_code=404, detail="Slot not found.")
             
-            db.delete(spot_del)
-            spot_del.status = "available"
+            update_query = text("UPDATE parkingspot SET status = 'available' WHERE id = :slot_id")
+            db.execute(update_query, {'slot_id': slot_id})
             db.commit()
 
-            remaining_spots = db.exec(select(ParkingSpot)).all()
+            # remaining_spots = db.exec(select(ParkingSpot)).all()
+            query_remaining = text("SELECT COUNT(*) FROM parkingspot")
+            remaining_count = db.execute(query_remaining).scalar()
 
-            if not remaining_spots:
+            if remaining_count == 0:
                 reset_sequence_query= text("ALTER SEQUENCE parkingspot_id_seq RESTART WITH 1")
-                db.exec(reset_sequence_query)
+                db.execute(reset_sequence_query)
                 db.commit()
 
-            next_vehicle = VehicleRegistrationController.process_waiting_queue(db)
+            next_vehicle = None    
+            try:
+                next_vehicle= VehicleRegistrationController.process_waiting_queue(db)
+            except Exception as e:
+                print(f"An error in process_waiting_queue: {e}")
+                next_vehicle =None    
+
+            # next_vehicle = VehicleRegistrationController.process_waiting_queue(db)
 
             if next_vehicle:
                 return{
@@ -76,38 +91,6 @@ class ParkingController:
         except Exception as e:
             raise HTTPException(status_code=500,detail=f"An error occured {e}")
         
-    @staticmethod
-    def get_vehicle_fee(vehicle_id: int, db: Session, rate_per_hour: int = 50):
-        try:
-            vehicle = db.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
-
-            if not vehicle:
-                raise HTTPException(status_code=404, detail="Vehicle not found.")
-
-            vehicle.exit_time = datetime.now(timezone.utc)
-
-            if vehicle.exit_time and vehicle.entry_time:
-                duration = vehicle.exit_time - vehicle.entry_time
-                hours_parked = max(1, duration.total_seconds() // 3600)
-                parking_fee = int(hours_parked * rate_per_hour)
-            else:
-                parking_fee = 50
-
-            entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
-            exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
-
-            formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
-            formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
-
-            return {
-                "vehicle_number": vehicle.vehicle_number,
-                "parking_spot_id": vehicle.parking_spot_id,
-                "exit_time": formatted_exit_time,
-                "entry_time": formatted_entry_time, 
-                "parking_fee": parking_fee
-                }
-        except Exception as e:
-            raise HTTPException(status_code=500,detail=f"An error occured {e}")
     
 class VehicleRegistrationController:
     waiting_queue=deque()
@@ -254,6 +237,39 @@ class VehicleRegistrationController:
         except HTTPException as http_exc:
             raise http_exc
         
+        except Exception as e:
+            raise HTTPException(status_code=500,detail=f"An error occured {e}")
+
+    @staticmethod
+    def get_vehicle_fee(vehicle_id: int, db: Session, rate_per_hour: int = 50):
+        try:
+            vehicle = db.exec(select(VehicleRegistration).where(VehicleRegistration.id == vehicle_id)).first()
+
+            if not vehicle:
+                raise HTTPException(status_code=404, detail="Vehicle not found.")
+
+            vehicle.exit_time = datetime.now(timezone.utc)
+
+            if vehicle.exit_time and vehicle.entry_time:
+                duration = vehicle.exit_time - vehicle.entry_time
+                hours_parked = max(1, duration.total_seconds() // 3600)
+                parking_fee = int(hours_parked * rate_per_hour)
+            else:
+                parking_fee = 50
+
+            entry_time_pst = vehicle.entry_time.astimezone(PST) if vehicle.entry_time else None
+            exit_time_pst = vehicle.exit_time.astimezone(PST) if vehicle.exit_time else None
+
+            formatted_entry_time = entry_time_pst.strftime("%I:%M %p") if entry_time_pst else None
+            formatted_exit_time = exit_time_pst.strftime("%I:%M %p") if exit_time_pst else None
+
+            return {
+                "vehicle_number": vehicle.vehicle_number,
+                "parking_spot_id": vehicle.parking_spot_id,
+                "exit_time": formatted_exit_time,
+                "entry_time": formatted_entry_time, 
+                "parking_fee": parking_fee
+                }
         except Exception as e:
             raise HTTPException(status_code=500,detail=f"An error occured {e}")
 
