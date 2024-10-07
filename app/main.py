@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from app.views.parking_view import router
 from app.database import init_db
-from contextlib import asynccontextmanager
 import  logging
 
 logging.basicConfig(level=logging.INFO)

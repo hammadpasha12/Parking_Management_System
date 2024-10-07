@@ -13,15 +13,15 @@ router = APIRouter()
 def hello():
     return {"message": "Parking System Management"}
 
-@router.get("/slots/", response_model=List[ParkingSpot])
+@router.get("/parking/", response_model=List[ParkingSpot])
 def read_parking_spots(db:Session = Depends(get_db)):
     return ParkingController.read_parking_spots(db)
 
-@router.post("/slots/", response_model=ParkingSpot)
+@router.post("/parking/", response_model=ParkingSpot)
 def create_parking_spot(parking_spot: ParkingSpot,db:Session = Depends(get_db)):
     return ParkingController.create_parking_spot(parking_spot,db)
 
-@router.delete("/slots/{slot_id}", response_model=dict)
+@router.delete("/parking/{slot_id}", response_model=dict)
 def delete_parking_spot(slot_id: int, db: Session = Depends(get_db)):
     return ParkingController.delete_parking_spot(slot_id,db)
 
