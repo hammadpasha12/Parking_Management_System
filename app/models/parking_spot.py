@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional,List
+from typing import Any, Optional,List
 from datetime import datetime, timezone
 
 class ParkingSpot(SQLModel, table=True):
@@ -28,3 +28,7 @@ class VehicleRegistrationResponse(SQLModel):
     parking_fee: Optional[int]  
     entry_time: Optional[str]
     parking_spot: Optional[ParkingSpotResponse]
+
+class GenericResponse(SQLModel):
+    message: Optional[str] = None
+    data: Optional[Any] = None    

@@ -220,7 +220,7 @@ class VehicleRegistrationController:
             vehicle.exit_time = datetime.now(timezone.utc)
             entry_time_aware = vehicle.entry_time if vehicle.entry_time.tzinfo else vehicle.entry_time.replace(tzinfo=timezone.utc)
             exit_time_aware = vehicle.exit_time
-
+             
             if exit_time_aware and entry_time_aware:
                 duration = exit_time_aware - entry_time_aware
                 hours_parked = math.ceil(duration.total_seconds() // 3600)
@@ -258,7 +258,7 @@ class VehicleRegistrationController:
             raise HTTPException(status_code=500,detail=f"An error occured {e}")
 
     @staticmethod
-    def get_all_vehicle_records(db:Session):
+    def get_all_vehicle_records(db: Session):
         try:
             statement = select(VehicleRegistration, ParkingSpot).join(ParkingSpot, VehicleRegistration.parking_spot_id == ParkingSpot.id)
             results = db.exec(statement).all()
@@ -269,42 +269,42 @@ class VehicleRegistrationController:
                 entry_time = vehicle.entry_time
                 exit_time = vehicle.exit_time
 
-            if vehicle.entry_time and exit_time:
-                duration = exit_time - vehicle.entry_time
-                hours_parked = math.ceil( duration.total_seconds() // 3600)
-                parking_fee = int(hours_parked * 50)
-            else:
-                parking_fee = 50
+                if vehicle.entry_time and exit_time:
+                    duration = exit_time - vehicle.entry_time
+                    hours_parked = math.ceil(duration.total_seconds() // 3600)
+                    parking_fee = int(hours_parked * 50)
+                else:
+                    parking_fee = 50
 
-            formatted_entry_time = entry_time.strftime("%I:%M %p") if entry_time else None
-            formatted_exit_time = exit_time.strftime("%I:%M %p") if exit_time else None
+                formatted_entry_time = entry_time.strftime("%I:%M %p") if entry_time else None
+                formatted_exit_time = exit_time.strftime("%I:%M %p") if exit_time else None
 
-            vehicle_record = {
-                "id": vehicle.id,
-                "vehicle_number": vehicle.vehicle_number,
-                "entry_time": formatted_entry_time,
-                "exit_time": formatted_exit_time,
-                "parking_fee": parking_fee,
-                "status": "exited" if exit_time else "parked",
-                "parking_spot": {
-                    "id": spot.id,
-                    "slot": spot.slot,
-                    "status": spot.status
+                vehicle_record = {
+                    "id": vehicle.id,
+                    "vehicle_number": vehicle.vehicle_number,
+                    "entry_time": formatted_entry_time,
+                    "exit_time": formatted_exit_time,
+                    "parking_fee": parking_fee,
+                    "status": "exited" if exit_time else "parked",
+                    "parking_spot": {
+                        "id": spot.id,
+                        "slot": spot.slot,
+                        "status": spot.status
+                    }
                 }
-            }
-            vehicle_records.append(vehicle_record)
+                vehicle_records.append(vehicle_record)
 
             for vehicle in VehicleRegistrationController.waiting_queue:
                 vehicle_record = {
-                "vehicle_number": vehicle.vehicle_number,
-                "status": "in queue",
-                "entry_time": None,
-                "exit_time": None,
-                "parking_spot": None,
-                "parking_fee": None
+                    "vehicle_number": vehicle.vehicle_number,
+                    "status": "in queue",
+                    "entry_time": None,
+                    "exit_time": None,
+                    "parking_spot": None,
+                    "parking_fee": None
                 }
-            vehicle_records.append(vehicle_record)
+                vehicle_records.append(vehicle_record)
 
-            return vehicle_records
+            return vehicle_records  
         except Exception as e:
-            raise HTTPException(status_code=500,detail=f"An error occured  {e}")
+            raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
